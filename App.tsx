@@ -23,14 +23,45 @@ const App: React.FC = () => {
 
     setSubscriptions(prev => [newSub, ...prev]);
 
+    // Detectar si estamos en un entorno sin backend (como este preview)
+    const isPreview = window.location.hostname.includes('web-platform') || 
+                      window.location.hostname.includes('localhost');
+
+    if (isPreview) {
+      // Simulación para el Preview
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const success = url.includes('substack.com');
+      const mockResponse = success 
+        ? { success: true, message: "SIMULACIÓN: Suscripción enviada (solo visible en deploy real de Vercel)" }
+        : { error: "URL no válida", message: "La URL debe ser de un substack real" };
+      
+      const status = success ? 'success' : 'failed';
+      setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status, responseBody: mockResponse } : s));
+      setLogs(prev => [{
+        id: Math.random().toString(36).substr(2, 9),
+        method: 'POST',
+        endpoint: '/api/subscribe (SIMULADO)',
+        requestBody: { email, url },
+        responseBody: mockResponse,
+        statusCode: success ? 200 : 400,
+        timestamp: new Date().toISOString(),
+      }, ...prev]);
+      return;
+    }
+
     try {
-      // Llamada al endpoint real en Vercel
+      // Llamada real (solo funcionará en Vercel con la carpeta /api desplegada)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
       const response = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, url }),
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
       const responseData = await response.json();
       const isSuccess = response.ok;
       
@@ -53,6 +84,8 @@ const App: React.FC = () => {
       };
       setLogs(prev => [newLog, ...prev]);
     } catch (error: any) {
+      const message = error.name === 'AbortError' ? 'Timeout: El servidor tardó demasiado' : error.message;
+      
       setSubscriptions(prev => 
         prev.map(s => s.id === id ? { ...s, status: 'failed' } : s)
       );
@@ -62,7 +95,7 @@ const App: React.FC = () => {
         method: 'POST',
         endpoint: '/api/subscribe',
         requestBody: { email, url },
-        responseBody: { error: 'Error de conexión', message: error.message },
+        responseBody: { error: 'Error de conexión', message },
         statusCode: 500,
         timestamp: new Date().toISOString(),
       };
