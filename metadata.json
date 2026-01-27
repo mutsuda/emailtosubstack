@@ -1,0 +1,5 @@
+{
+  "name": "Substack Automator API Service",
+  "description": "A developer-focused tool to programmatically manage Substack newsletter subscriptions. Provide an email and a newsletter URL to simulate and integrate subscription workflows with a clean, API-driven interface.",
+  "requestFramePermissions": []
+}
