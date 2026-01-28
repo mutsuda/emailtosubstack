@@ -1,81 +1,83 @@
 
-export const config = {
-  runtime: 'edge',
-};
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-export default async function handler(req: Request) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Solo permitir POST
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Método no permitido' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
-    const { email, url } = await req.json();
+    const { email, url } = req.body;
 
     if (!email || !url) {
-      return new Response(JSON.stringify({ error: 'Email y URL son requeridos' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return res.status(400).json({ error: 'Faltan parámetros: email y url son obligatorios.' });
     }
 
-    // Parseo robusto de la URL
-    let newsletterSubdomain = '';
-    try {
-      const parsedUrl = new URL(url);
-      const hostParts = parsedUrl.hostname.split('.');
-      // itnig.substack.com -> itnig
-      // newsletter.itnig.net -> newsletter
-      newsletterSubdomain = hostParts[0];
-      if (newsletterSubdomain === 'www' && hostParts.length > 1) {
-        newsletterSubdomain = hostParts[1];
-      }
-    } catch (e) {
-      return new Response(JSON.stringify({ error: 'URL inválida' }), { status: 400 });
+    // 1. Limpiar y validar la URL
+    let cleanUrl = url.trim().replace(/\/$/, "");
+    if (!cleanUrl.startsWith('http')) cleanUrl = `https://${cleanUrl}`;
+    
+    const parsedUrl = new URL(cleanUrl);
+    const hostname = parsedUrl.hostname;
+    
+    // 2. Determinar el subdominio para la API
+    // itnig.substack.com -> itnig
+    // newsletter.itnig.net -> newsletter.itnig.net (usar el host directamente)
+    let apiHostname = hostname;
+    if (hostname.endsWith('.substack.com')) {
+      apiHostname = hostname;
+    } else {
+      // Si es dominio personalizado, Substack suele preferir su subdominio interno
+      // pero probamos con el host actual primero que es lo que hacen los proxies.
+      apiHostname = hostname;
     }
 
-    const substackApiUrl = `https://${newsletterSubdomain}.substack.com/api/v1/free_signup`;
+    const substackApiUrl = `https://${apiHostname}/api/v1/free_signup`;
 
+    // 3. Petición con cabeceras que imitan a un navegador real
     const substackResponse = await fetch(substackApiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        'Origin': `https://${newsletterSubdomain}.substack.com`,
-        'Referer': `${url}/`
+        'Origin': `https://${apiHostname}`,
+        'Referer': `https://${apiHostname}/`,
+        'X-Requested-With': 'XMLHttpRequest'
       },
       body: JSON.stringify({
-        email,
-        first_url: url,
+        email: email,
+        first_url: cleanUrl,
         first_referrer: "",
         referral_code: "",
+        source: "embed" // Algunas versiones de la API lo requieren
       }),
     });
 
-    // LEER COMO TEXTO PRIMERO PARA EVITAR "Unexpected end of JSON input"
-    const responseText = await substackResponse.text();
-    let responseData;
-    
+    // 4. Procesar respuesta de forma segura
+    const text = await substackResponse.text();
+    let data;
     try {
-      responseData = responseText ? JSON.parse(responseText) : { success: true, message: 'Subscribed (empty response)' };
+      data = text ? JSON.parse(text) : { success: true };
     } catch (e) {
-      responseData = { success: substackResponse.ok, rawResponse: responseText };
+      data = { raw: text };
     }
-    
-    return new Response(JSON.stringify(responseData), {
+
+    // 5. Responder al frontend
+    return res.status(200).json({
+      success: substackResponse.ok,
       status: substackResponse.status,
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
+      message: substackResponse.ok ? 'Suscrito con éxito' : 'Substack rechazó la petición',
+      data: data
     });
+
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: 'Error interno', details: error.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
+    console.error('API Error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Error interno en el proxy', 
+      details: error.message 
     });
   }
 }

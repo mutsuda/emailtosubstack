@@ -23,55 +23,30 @@ const App: React.FC = () => {
 
     setSubscriptions(prev => [newSub, ...prev]);
 
-    // Detección más amplia de entornos de preview/locales que no tienen el backend de Vercel activo
-    const isMockEnv = window.location.hostname.includes('web-platform') || 
-                      window.location.hostname.includes('localhost') ||
-                      window.location.hostname.includes('127.0.0.1') ||
-                      window.location.hostname.includes('stackblitz') ||
-                      window.location.hostname.includes('gemini');
-
-    if (isMockEnv) {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      const success = url.includes('substack.com');
-      const mockResponse = { 
-        success: true, 
-        env: "MOCK_MODE",
-        message: "Simulación: En un deploy real de Vercel, esto llamaría a /api/subscribe." 
-      };
-      
-      setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status: success ? 'success' : 'failed', responseBody: mockResponse } : s));
-      setLogs(prev => [{
-        id: Math.random().toString(36).substr(2, 9),
-        method: 'POST',
-        endpoint: '/api/subscribe (MOCK)',
-        requestBody: { email, url },
-        responseBody: mockResponse,
-        statusCode: 200,
-        timestamp: new Date().toISOString(),
-      }, ...prev]);
-      return;
-    }
+    // Detección de entorno local/preview que no tiene backend
+    const isLocal = window.location.hostname.includes('web-platform') || 
+                    window.location.hostname.includes('stackblitz') ||
+                    window.location.hostname.includes('localhost');
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
-
       const response = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, url }),
-        signal: controller.signal
       });
 
-      clearTimeout(timeoutId);
-      const responseData = await response.json();
-      const isSuccess = response.ok;
+      if (response.status === 404) {
+        throw new Error("Ruta /api/subscribe no encontrada (404). Asegúrate de que estás en un despliegue de Vercel con funciones habilitadas.");
+      }
+
+      const result = await response.json();
+      const isActuallySuccess = result.success === true;
       
       setSubscriptions(prev => 
         prev.map(s => s.id === id ? { 
           ...s, 
-          status: isSuccess ? 'success' : 'failed', 
-          responseBody: responseData 
+          status: isActuallySuccess ? 'success' : 'failed', 
+          responseBody: result 
         } : s)
       );
 
@@ -80,19 +55,27 @@ const App: React.FC = () => {
         method: 'POST',
         endpoint: '/api/subscribe',
         requestBody: { email, url },
-        responseBody: responseData,
+        responseBody: result,
         statusCode: response.status,
         timestamp: new Date().toISOString(),
       }, ...prev]);
+
     } catch (error: any) {
-      const message = error.name === 'AbortError' ? 'El servidor no respondió a tiempo' : error.message;
-      setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status: 'failed' } : s));
+      console.error('Error in request:', error);
+      
+      const errorResponse = { 
+        error: "Error de comunicación", 
+        message: error.message,
+        tip: isLocal ? "Estás en modo previsualización local. Para que la API funcione de verdad, debes desplegar este código en Vercel." : "Verifica los logs de Vercel."
+      };
+
+      setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status: 'failed', responseBody: errorResponse } : s));
       setLogs(prev => [{
         id: Math.random().toString(36).substr(2, 9),
         method: 'POST',
         endpoint: '/api/subscribe',
         requestBody: { email, url },
-        responseBody: { error: 'Error de red', message },
+        responseBody: errorResponse,
         statusCode: 500,
         timestamp: new Date().toISOString(),
       }, ...prev]);
@@ -102,43 +85,38 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Header setView={setView} currentView={view} />
-      
       <main className="flex-grow container mx-auto px-4 py-8 max-w-6xl">
         {view === 'service' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in duration-500">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-8">
               <section>
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">Suscripción Automática</h2>
-                <p className="text-gray-600 mb-6">Prueba el endpoint de tu API enviando un email a cualquier Substack.</p>
+                <div className="flex items-center space-x-3 mb-2">
+                  <h2 className="text-2xl font-bold text-gray-800">API Proxy Substack</h2>
+                  <span className="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">v1.2 Stable</span>
+                </div>
+                <p className="text-gray-600 mb-6 text-sm">Usa este endpoint para suscribir usuarios programáticamente sin problemas de CORS.</p>
                 <SubstackForm onSubmit={handleNewSubscription} />
               </section>
-
+              
               <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                  <svg className="w-5 h-5 mr-2 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                  </svg>
-                  Uso de la API
-                </h3>
-                <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                  <code className="text-pink-400 text-sm mono">
-                    POST /api/subscribe<br/>
-                    &#123; "email": "...", "url": "..." &#125;
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Uso desde CURL / App Externa</h3>
+                <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto border-l-4 border-orange-500 shadow-inner">
+                  <code className="text-gray-300 text-xs mono block leading-relaxed">
+                    <span className="text-pink-400">curl</span> -X POST https://tu-app.vercel.app/api/subscribe \<br/>
+                    &nbsp;&nbsp;-H <span className="text-green-400">"Content-Type: application/json"</span> \<br/>
+                    &nbsp;&nbsp;-d '<span className="text-yellow-400">{"{"} "email": "test@mail.com", "url": "https://itnig.substack.com" {"}"}</span>'
                   </code>
                 </div>
               </section>
             </div>
-
+            
             <div className="space-y-8">
               <section>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-2xl font-bold text-gray-800">Monitor</h2>
-                  <div className="flex items-center text-xs font-bold text-green-500 uppercase">
-                    <span className="relative flex h-2 w-2 mr-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                    </span>
-                    Live
+                  <h2 className="text-xl font-bold text-gray-800">Monitor de Tráfico</h2>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Edge Runtime</span>
+                    <span className="flex h-2 w-2 rounded-full bg-green-500"></span>
                   </div>
                 </div>
                 <LogViewer logs={logs} subscriptions={subscriptions} />
@@ -149,14 +127,9 @@ const App: React.FC = () => {
           <DeploymentGuide />
         )}
       </main>
-
-      <footer className="bg-white border-t border-gray-200 py-8 mt-auto">
-        <div className="container mx-auto px-4 flex justify-between items-center text-gray-400 text-xs">
-          <p>&copy; {new Date().getFullYear()} Substack Automator.</p>
-          <div className="flex space-x-4">
-            <a href="#" className="hover:text-gray-600">Documentación</a>
-            <a href="#" className="hover:text-gray-600">GitHub</a>
-          </div>
+      <footer className="bg-white border-t border-gray-100 py-6 mt-auto">
+        <div className="container mx-auto px-4 text-center text-gray-400 text-[10px] uppercase tracking-widest">
+          Substack Automator &bull; Bridge Service &bull; {new Date().getFullYear()}
         </div>
       </footer>
     </div>

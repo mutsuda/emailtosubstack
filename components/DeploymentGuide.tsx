@@ -3,32 +3,32 @@ import React from 'react';
 
 export const DeploymentGuide: React.FC = () => {
   const serverCode = `
-// api/subscribe.ts (Vercel Serverless Function)
+// api/subscribe.ts (Vercel Node.js Function)
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
   const { email, url } = req.body;
-  const newsletterName = new URL(url).hostname.split('.')[0];
-  const substackApiUrl = \`https://\${newsletterName}.substack.com/api/v1/free_signup\`;
+  const host = new URL(url).hostname;
+  const apiUrl = \`https://\${host}/api/v1/free_signup\`;
 
   try {
-    const response = await fetch(substackApiUrl, {
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        first_url: url,
-        first_referrer: "",
-        referral_code: "",
-      }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Origin': \`https://\${host}\`,
+        'Referer': \`https://\${host}/\`,
+        'User-Agent': 'Mozilla/5.0'
+      },
+      body: JSON.stringify({ email, first_url: url })
     });
 
-    const data = await response.json();
-    return res.status(200).json(data);
+    const data = await response.json().catch(() => ({ success: true }));
+    return res.status(200).json({ success: response.ok, data });
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to subscribe' });
+    return res.status(500).json({ error: 'Proxy failed' });
   }
 }
   `.trim();
@@ -36,17 +36,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return (
     <div className="max-w-4xl mx-auto space-y-12 py-4 animate-in slide-in-from-bottom-4 duration-500">
       <div className="text-center">
-        <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Despliegue en Vercel</h1>
+        <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Guía de Despliegue Real</h1>
         <p className="mt-4 text-lg text-gray-600">
-          Convierte este prototipo en un servicio de producción real en menos de 5 minutos.
+          Para que el botón "Ejecutar Suscripción" funcione de verdad, el código debe correr en Vercel.
         </p>
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
         {[
-          { title: '1. Estructura', desc: 'Crea una carpeta /api en la raíz de tu proyecto.', icon: '📁' },
-          { title: '2. Backend', desc: 'Añade el archivo subscribe.ts para manejar el CORS.', icon: '⚡' },
-          { title: '3. Deploy', desc: 'Conecta tu GitHub a Vercel y listo.', icon: '🚀' },
+          { title: '1. Repositorio', desc: 'Sube estos archivos a un repo de GitHub.', icon: '📁' },
+          { title: '2. Vercel', desc: 'Importa el proyecto en vercel.com.', icon: '⚡' },
+          { title: '3. /api folder', desc: 'Vercel activará automáticamente la ruta /api/subscribe.', icon: '🚀' },
         ].map((step, i) => (
           <div key={i} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
             <div className="text-3xl mb-3">{step.icon}</div>
@@ -63,32 +63,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
             <div className="w-3 h-3 rounded-full bg-green-500"></div>
           </div>
-          <span className="text-xs text-gray-400 mono">api/subscribe.ts</span>
+          <span className="text-xs text-gray-400 mono">Lógica del Servidor</span>
         </div>
         <div className="p-6 overflow-x-auto bg-gray-900">
           <pre className="text-blue-300 text-sm mono">
             {serverCode}
           </pre>
         </div>
-        <div className="p-6 bg-blue-50 border-t border-blue-100">
-          <h4 className="font-bold text-blue-900 mb-2">💡 ¿Por qué usar Serverless?</h4>
-          <p className="text-sm text-blue-800 leading-relaxed">
-            Substack protege sus formularios con mecanismos que el navegador bloquea si se llaman desde otro dominio (CORS). 
-            Al usar una <strong>Serverless Function</strong>, la petición se hace desde el servidor de Vercel directamente a los servidores de Substack, evitando cualquier bloqueo del navegador.
-          </p>
-        </div>
       </section>
 
-      <div className="flex flex-col items-center space-y-4">
-        <p className="text-gray-500 text-sm">¿Listo para empezar?</p>
-        <a 
-          href="https://vercel.com/new" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="bg-black text-white px-8 py-3 rounded-full font-bold hover:bg-gray-800 transition-all transform hover:scale-105 shadow-lg"
-        >
-          Desplegar en Vercel Gratis
-        </a>
+      <div className="bg-orange-50 p-6 rounded-xl border border-orange-100 flex items-start space-x-4">
+        <div className="text-2xl">⚠️</div>
+        <div>
+          <h4 className="font-bold text-orange-900">¿Por qué ves errores 404 ahora mismo?</h4>
+          <p className="text-sm text-orange-800 leading-relaxed">
+            Las funciones de servidor (carpeta <code className="bg-orange-200 px-1 rounded">/api</code>) solo funcionan cuando el código está desplegado en Vercel o usando el comando <code className="bg-orange-200 px-1 rounded">vercel dev</code> localmente. En este entorno de previsualización web, las funciones de servidor no están activas.
+          </p>
+        </div>
       </div>
     </div>
   );
