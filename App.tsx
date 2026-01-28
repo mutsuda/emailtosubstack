@@ -23,11 +23,6 @@ const App: React.FC = () => {
 
     setSubscriptions(prev => [newSub, ...prev]);
 
-    // Detección de entorno local/preview que no tiene backend
-    const isLocal = window.location.hostname.includes('web-platform') || 
-                    window.location.hostname.includes('stackblitz') ||
-                    window.location.hostname.includes('localhost');
-
     try {
       const response = await fetch('/api/subscribe', {
         method: 'POST',
@@ -35,11 +30,14 @@ const App: React.FC = () => {
         body: JSON.stringify({ email, url }),
       });
 
+      // Si el proxy mismo falla (ej: no desplegado)
       if (response.status === 404) {
-        throw new Error("Ruta /api/subscribe no encontrada (404). Asegúrate de que estás en un despliegue de Vercel con funciones habilitadas.");
+        throw new Error("El endpoint /api/subscribe no existe. ¿Has desplegado en Vercel?");
       }
 
       const result = await response.json();
+      
+      // Consideramos éxito si la API del proxy devolvió success: true
       const isActuallySuccess = result.success === true;
       
       setSubscriptions(prev => 
@@ -61,12 +59,12 @@ const App: React.FC = () => {
       }, ...prev]);
 
     } catch (error: any) {
-      console.error('Error in request:', error);
+      console.error('Request Execution Error:', error);
       
       const errorResponse = { 
-        error: "Error de comunicación", 
+        success: false,
+        error: "Error Crítico", 
         message: error.message,
-        tip: isLocal ? "Estás en modo previsualización local. Para que la API funcione de verdad, debes desplegar este código en Vercel." : "Verifica los logs de Vercel."
       };
 
       setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status: 'failed', responseBody: errorResponse } : s));
@@ -91,20 +89,22 @@ const App: React.FC = () => {
             <div className="space-y-8">
               <section>
                 <div className="flex items-center space-x-3 mb-2">
-                  <h2 className="text-2xl font-bold text-gray-800">API Proxy Substack</h2>
-                  <span className="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">v1.2 Stable</span>
+                  <h2 className="text-2xl font-bold text-gray-800">Bridge para Substack</h2>
+                  <span className="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">v1.4 Fix</span>
                 </div>
-                <p className="text-gray-600 mb-6 text-sm">Usa este endpoint para suscribir usuarios programáticamente sin problemas de CORS.</p>
+                <p className="text-gray-600 mb-6 text-sm">Esta versión usa la API central de Substack para evitar errores 404 en subdominios.</p>
                 <SubstackForm onSubmit={handleNewSubscription} />
               </section>
               
               <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Uso desde CURL / App Externa</h3>
-                <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto border-l-4 border-orange-500 shadow-inner">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Referencia del API</h3>
+                <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto border-l-4 border-green-500 shadow-inner">
                   <code className="text-gray-300 text-xs mono block leading-relaxed">
-                    <span className="text-pink-400">curl</span> -X POST https://tu-app.vercel.app/api/subscribe \<br/>
-                    &nbsp;&nbsp;-H <span className="text-green-400">"Content-Type: application/json"</span> \<br/>
-                    &nbsp;&nbsp;-d '<span className="text-yellow-400">{"{"} "email": "test@mail.com", "url": "https://itnig.substack.com" {"}"}</span>'
+                    <span className="text-pink-400">POST</span> /api/subscribe<br/>
+                    <span className="text-gray-500">{"{"}</span><br/>
+                    &nbsp;&nbsp;"email": <span className="text-yellow-400">"..."</span>,<br/>
+                    &nbsp;&nbsp;"url": <span className="text-yellow-400">"https://itnig.substack.com"</span><br/>
+                    <span className="text-gray-500">{"}"}</span>
                   </code>
                 </div>
               </section>
@@ -113,9 +113,9 @@ const App: React.FC = () => {
             <div className="space-y-8">
               <section>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-800">Monitor de Tráfico</h2>
+                  <h2 className="text-xl font-bold text-gray-800">Monitor de Logs</h2>
                   <div className="flex items-center space-x-2">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Edge Runtime</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Status</span>
                     <span className="flex h-2 w-2 rounded-full bg-green-500"></span>
                   </div>
                 </div>
@@ -128,8 +128,8 @@ const App: React.FC = () => {
         )}
       </main>
       <footer className="bg-white border-t border-gray-100 py-6 mt-auto">
-        <div className="container mx-auto px-4 text-center text-gray-400 text-[10px] uppercase tracking-widest">
-          Substack Automator &bull; Bridge Service &bull; {new Date().getFullYear()}
+        <div className="container mx-auto px-4 text-center text-gray-400 text-[10px] uppercase">
+          Substack API Bridge &bull; Optimizado para el nuevo API central
         </div>
       </footer>
     </div>
