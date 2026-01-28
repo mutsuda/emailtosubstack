@@ -7,7 +7,7 @@ interface SubstackFormProps {
 
 export const SubstackForm: React.FC<SubstackFormProps> = ({ onSubmit }) => {
   const [email, setEmail] = useState('');
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState('https://itnig.substack.com');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -17,68 +17,69 @@ export const SubstackForm: React.FC<SubstackFormProps> = ({ onSubmit }) => {
     setIsSubmitting(true);
     onSubmit(email, url);
     
-    // Clear form after submission start
+    // Simular feedback de carga
     setTimeout(() => {
       setEmail('');
-      setUrl('');
       setIsSubmitting(false);
-    }, 500);
+    }, 1000);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
-      <div className="space-y-5">
-        <div>
-          <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
-            Email del Suscriptor
-          </label>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 block">
+          Newsletter URL
+        </label>
+        <div className="relative">
           <input
-            id="email"
-            type="email"
-            required
-            placeholder="usuario@correo.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition-all placeholder:text-gray-400"
-          />
-        </div>
-        <div>
-          <label htmlFor="url" className="block text-sm font-semibold text-gray-700 mb-2">
-            URL de Substack
-          </label>
-          <input
-            id="url"
             type="url"
             required
-            placeholder="https://ejemplo.substack.com"
+            placeholder="https://itnig.substack.com"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition-all placeholder:text-gray-400"
+            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all text-sm"
           />
-          <p className="mt-2 text-xs text-gray-500">
-            Asegúrate de que incluya el protocolo (http/https).
-          </p>
+          <div className="absolute left-3 top-3.5 text-gray-400">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+          </div>
         </div>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className={`w-full py-4 rounded-lg font-bold text-white shadow-md transition-all active:scale-[0.98] ${
-            isSubmitting 
-              ? 'bg-gray-400 cursor-not-allowed' 
-              : 'bg-orange-600 hover:bg-orange-700'
-          }`}
-        >
-          {isSubmitting ? (
-            <span className="flex items-center justify-center">
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Procesando...
-            </span>
-          ) : 'Ejecutar Suscripción'}
-        </button>
       </div>
+      
+      <div>
+        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 block">
+          Email del Usuario
+        </label>
+        <div className="relative">
+          <input
+            type="email"
+            required
+            placeholder="cliente@ejemplo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all text-sm"
+          />
+          <div className="absolute left-3 top-3.5 text-gray-400">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+          </div>
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition-all active:scale-[0.98] flex items-center justify-center space-x-2 ${
+          isSubmitting ? 'bg-gray-400' : 'bg-gray-900 hover:bg-black hover:shadow-xl'
+        }`}
+      >
+        {isSubmitting ? (
+          <>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span>Enviando...</span>
+          </>
+        ) : (
+          <span>Suscribir ahora</span>
+        )}
+      </button>
     </form>
   );
 };

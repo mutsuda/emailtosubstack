@@ -30,14 +30,11 @@ const App: React.FC = () => {
         body: JSON.stringify({ email, url }),
       });
 
-      // Si el proxy mismo falla (ej: no desplegado)
       if (response.status === 404) {
-        throw new Error("El endpoint /api/subscribe no existe. ¿Has desplegado en Vercel?");
+        throw new Error("Ruta /api/subscribe no disponible. Despliega en Vercel para activar el backend.");
       }
 
       const result = await response.json();
-      
-      // Consideramos éxito si la API del proxy devolvió success: true
       const isActuallySuccess = result.success === true;
       
       setSubscriptions(prev => 
@@ -54,19 +51,12 @@ const App: React.FC = () => {
         endpoint: '/api/subscribe',
         requestBody: { email, url },
         responseBody: result,
-        statusCode: response.status,
+        statusCode: result.status || response.status,
         timestamp: new Date().toISOString(),
       }, ...prev]);
 
     } catch (error: any) {
-      console.error('Request Execution Error:', error);
-      
-      const errorResponse = { 
-        success: false,
-        error: "Error Crítico", 
-        message: error.message,
-      };
-
+      const errorResponse = { success: false, error: "Error de red", message: error.message };
       setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status: 'failed', responseBody: errorResponse } : s));
       setLogs(prev => [{
         id: Math.random().toString(36).substr(2, 9),
@@ -81,56 +71,48 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       <Header setView={setView} currentView={view} />
       <main className="flex-grow container mx-auto px-4 py-8 max-w-6xl">
         {view === 'service' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="space-y-8">
-              <section>
-                <div className="flex items-center space-x-3 mb-2">
-                  <h2 className="text-2xl font-bold text-gray-800">Bridge para Substack</h2>
-                  <span className="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">v1.4 Fix</span>
-                </div>
-                <p className="text-gray-600 mb-6 text-sm">Esta versión usa la API central de Substack para evitar errores 404 en subdominios.</p>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-5 space-y-6">
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Suscribir Usuario</h2>
+                <p className="text-gray-500 text-sm mb-6">Envía un email a cualquier newsletter de Substack usando tu propia marca.</p>
                 <SubstackForm onSubmit={handleNewSubscription} />
-              </section>
-              
-              <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Referencia del API</h3>
-                <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto border-l-4 border-green-500 shadow-inner">
-                  <code className="text-gray-300 text-xs mono block leading-relaxed">
-                    <span className="text-pink-400">POST</span> /api/subscribe<br/>
-                    <span className="text-gray-500">{"{"}</span><br/>
-                    &nbsp;&nbsp;"email": <span className="text-yellow-400">"..."</span>,<br/>
-                    &nbsp;&nbsp;"url": <span className="text-yellow-400">"https://itnig.substack.com"</span><br/>
-                    <span className="text-gray-500">{"}"}</span>
-                  </code>
-                </div>
-              </section>
+              </div>
+
+              <div className="bg-blue-600 rounded-2xl p-6 text-white shadow-lg">
+                <h3 className="font-bold mb-2 flex items-center">
+                  <span className="mr-2">💡</span> ¿Cómo funciona esto?
+                </h3>
+                <p className="text-blue-100 text-xs leading-relaxed">
+                  Este puente (Bridge) actúa como un navegador intermedio. 
+                  Envía las peticiones a Substack con las cabeceras necesarias 
+                  para evitar bloqueos de seguridad, permitiéndote crear 
+                  formularios de registro 100% personalizados.
+                </p>
+              </div>
             </div>
             
-            <div className="space-y-8">
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-800">Monitor de Logs</h2>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Status</span>
-                    <span className="flex h-2 w-2 rounded-full bg-green-500"></span>
-                  </div>
+            <div className="lg:col-span-7 space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-gray-800">Inspección de API en Tiempo Real</h2>
+                <div className="flex space-x-2">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Servidor Activo</span>
                 </div>
-                <LogViewer logs={logs} subscriptions={subscriptions} />
-              </section>
+              </div>
+              <LogViewer logs={logs} subscriptions={subscriptions} />
             </div>
           </div>
         ) : (
           <DeploymentGuide />
         )}
       </main>
-      <footer className="bg-white border-t border-gray-100 py-6 mt-auto">
-        <div className="container mx-auto px-4 text-center text-gray-400 text-[10px] uppercase">
-          Substack API Bridge &bull; Optimizado para el nuevo API central
-        </div>
+      <footer className="py-8 text-center text-gray-400 text-xs font-medium uppercase tracking-[0.2em]">
+        Substack Stealth Bridge &bull; Professional Edition
       </footer>
     </div>
   );

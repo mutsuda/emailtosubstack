@@ -6,84 +6,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
-
   try {
     const { email, url } = req.body;
 
     if (!email || !url) {
-      return res.status(400).json({ error: 'Email y URL son obligatorios.' });
+      return res.status(400).json({ error: 'Faltan campos: email y url.' });
     }
 
-    const cleanUrl = url.trim().replace(/\/$/, "");
-    let hostname = '';
-    let subdomain = '';
+    // 1. Normalizar URL y extraer subdominio
+    let cleanUrl = url.trim().replace(/\/$/, "");
+    if (!cleanUrl.startsWith('http')) cleanUrl = `https://${cleanUrl}`;
     
-    try {
-      const urlObj = new URL(cleanUrl);
-      hostname = urlObj.hostname;
-      // Extraer itnig de itnig.substack.com
-      const parts = hostname.split('.');
-      if (parts.length >= 2) {
-        subdomain = parts[0];
-      }
-    } catch (e) {
-      return res.status(400).json({ error: 'La URL proporcionada no es válida.' });
-    }
+    const urlObj = new URL(cleanUrl);
+    const hostname = urlObj.hostname;
     
-    // Usamos el endpoint central de Substack que es más estable
-    const substackApiUrl = `https://substack.com/api/v1/free_signup`;
+    // El endpoint real al que el navegador envía los datos
+    const targetUrl = `https://${hostname}/api/v1/free_signup`;
 
-    const substackResponse = await fetch(substackApiUrl, {
+    console.log(`Intentando suscribir a ${email} en ${targetUrl}`);
+
+    // 2. Realizar la petición con cabeceras "Stealth"
+    const response = await fetch(targetUrl, {
       method: 'POST',
-      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        'Accept': 'application/json, text/plain, */*',
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        'Origin': 'https://substack.com',
-        'Referer': 'https://substack.com/',
-        'X-Requested-With': 'XMLHttpRequest'
+        'Origin': `https://${hostname}`,
+        'Referer': `https://${hostname}/`,
+        'X-Requested-With': 'XMLHttpRequest',
+        'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"'
       },
       body: JSON.stringify({
-        email,
+        email: email,
         first_url: cleanUrl,
         first_referrer: "",
         referral_code: "",
-        source: "newsletter_signup",
-        newsletter_subdomain: subdomain, // CAMBIO CLAVE: Enviamos el subdominio aquí
-        reserved_address: null
+        source: "embed" // Muy importante: le dice a Substack que viene de un iframe/embed
       }),
     });
 
-    clearTimeout(timeoutId);
-
-    const text = await substackResponse.text();
-    let data;
+    const status = response.status;
+    const text = await response.text();
+    
+    let result;
     try {
-      data = text ? JSON.parse(text) : { success: true };
+      result = JSON.parse(text);
     } catch (e) {
-      data = { raw: text };
+      result = { raw: text };
     }
 
-    // Substack a veces devuelve 400 si el email ya existe o el subdominio es inválido
+    // 3. Responder al frontend con el detalle de lo que dijo Substack
     return res.status(200).json({
-      success: substackResponse.ok,
-      status: substackResponse.status,
-      message: substackResponse.ok ? 'Suscripción exitosa' : 'Substack rechazó la petición',
-      subdomain_detected: subdomain,
-      data: data
+      success: response.ok,
+      status: status,
+      message: response.ok ? '¡Suscripción enviada con éxito!' : 'Error en la API de Substack',
+      debug: {
+        target: targetUrl,
+        response: result
+      }
     });
 
   } catch (error: any) {
-    clearTimeout(timeoutId);
-    console.error('API Proxy Error:', error);
-    
-    const isTimeout = error.name === 'AbortError';
-    return res.status(isTimeout ? 504 : 500).json({ 
+    console.error('Proxy Error:', error);
+    return res.status(500).json({ 
       success: false, 
-      error: isTimeout ? 'Timeout con Substack' : 'Error en el servidor', 
+      error: 'Error interno en el Bridge', 
       details: error.message 
     });
   }
