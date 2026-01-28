@@ -2,7 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Configuración CORS básica para permitir el uso desde el frontend
+  // Configuración CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
@@ -23,72 +23,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { email, url } = req.body;
 
     if (!email || !url) {
-      return res.status(400).json({ error: 'Faltan parámetros: email o url' });
+      return res.status(400).json({ error: 'Faltan parámetros obligatorios' });
     }
 
-    // 1. Extraer el subdominio de la URL (ej: itnig.substack.com -> itnig)
-    let targetSubdomain = '';
-    try {
-      const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
-      const parts = urlObj.hostname.split('.');
-      // Asumimos estructura standard: [subdominio].substack.com
-      if (parts.length >= 2 && urlObj.hostname.includes('substack')) {
-        targetSubdomain = parts[0];
-      } else {
-        // Fallback para dominios custom o estructuras raras
-        targetSubdomain = parts[0];
-      }
-    } catch (e) {
-      return res.status(400).json({ error: 'URL inválida' });
+    // 1. Preparar URL base (ej: https://itnig.substack.com)
+    let targetBaseUrl = url.trim();
+    if (!targetBaseUrl.startsWith('http')) {
+      targetBaseUrl = `https://${targetBaseUrl}`;
     }
+    // Eliminar slash final si existe para consistencia
+    targetBaseUrl = targetBaseUrl.replace(/\/$/, "");
 
-    console.log(`Intentando suscribir ${email} al subdominio: ${targetSubdomain}`);
+    // 2. Construir endpoint específico del newsletter
+    const endpoint = `${targetBaseUrl}/api/v1/free_signup`;
 
-    // 2. Usar la API Central. Esta es la versión que suele funcionar (14:52 version).
-    const targetUrl = 'https://substack.com/api/v1/free_signup';
+    console.log(`[Proxy] Target: ${endpoint} | Email: ${email}`);
 
+    // 3. Payload según especificación de ingeniería inversa (TechTrails)
     const payload = {
-      email,
-      newsletter_subdomain: targetSubdomain, // CLAVE: Decirle a la API central a qué newsletter va
-      source: "cover_page",
-      first_url: url,
-      first_referrer: "https://substack.com/",
-      current_url: url,
-      referral_code: ""
+      email: email,
+      first_url: targetBaseUrl,
+      first_referrer: "", // Dejar vacío ayuda a evitar comprobaciones estrictas de referer externo
+      current_url: targetBaseUrl,
+      referral_code: "",
+      source: "cover_page", // CRÍTICO: Indica que viene de la página principal del newsletter
+      saved_attribution_history: "[]"
     };
 
-    const response = await fetch(targetUrl, {
+    // 4. Petición simulando ser el navegador en el propio dominio
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // Imitamos ser la página principal de Substack
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Origin': 'https://substack.com',
-        'Referer': 'https://substack.com/'
+        // User Agent moderno para pasar filtros de bot simples
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        // Origin y Referer deben coincidir con el dominio destino para evitar CSRF/CORS check fallido
+        'Origin': targetBaseUrl,
+        'Referer': `${targetBaseUrl}/`
       },
       body: JSON.stringify(payload),
     });
 
     const data = await response.json().catch(() => ({}));
 
-    // Substack devuelve 200 OK si todo va bien
     if (!response.ok) {
-      console.error('Error respuesta Substack:', data);
+      console.error('[Proxy] Error de Substack:', response.status, data);
       return res.status(response.status).json({
         success: false,
-        message: 'Substack rechazó la suscripción',
+        message: 'Substack rechazó la solicitud',
         details: data
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Usuario suscrito correctamente',
+      message: 'Suscripción enviada correctamente',
       data: data
     });
 
   } catch (error: any) {
-    console.error('Server Error:', error);
+    console.error('[Proxy] Error Interno:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 }

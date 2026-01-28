@@ -31,13 +31,12 @@ const App: React.FC = () => {
       });
 
       if (response.status === 404) {
-        throw new Error("Backend no encontrado (404). Asegúrate de desplegar en Vercel.");
+        throw new Error("Backend no disponible (404). Despliega en Vercel para activar la API.");
       }
 
       const result = await response.json();
       
-      // En la API central, response.ok suele significar éxito
-      const isSuccess = result.success === true;
+      const isSuccess = response.ok && result.success;
       
       setSubscriptions(prev => 
         prev.map(s => s.id === id ? { 
@@ -50,15 +49,15 @@ const App: React.FC = () => {
       setLogs(prev => [{
         id: Math.random().toString(36).substr(2, 9),
         method: 'POST',
-        endpoint: '/api/subscribe (Central)',
-        requestBody: { email, url },
+        endpoint: '/api/subscribe',
+        requestBody: { email, url, method: 'Direct Endpoint Spoofing' },
         responseBody: result,
         statusCode: response.status,
         timestamp: new Date().toISOString(),
       }, ...prev]);
 
     } catch (error: any) {
-      const errorResponse = { success: false, error: "Error de conexión", message: error.message };
+      const errorResponse = { success: false, error: "Error de red", message: error.message };
       setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status: 'failed', responseBody: errorResponse } : s));
       setLogs(prev => [{
         id: Math.random().toString(36).substr(2, 9),
@@ -82,25 +81,29 @@ const App: React.FC = () => {
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <div className="flex items-center justify-between mb-4">
                    <h2 className="text-2xl font-bold text-gray-900">Suscripción</h2>
-                   <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">v1.5 Central</span>
+                   <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">v2.0 TechTrails</span>
                 </div>
-                <p className="text-gray-500 text-sm mb-6">Introduce el email y la URL de Substack. El sistema usará la API central para procesarlo.</p>
+                <p className="text-gray-500 text-sm mb-6">Usa tu propia interfaz. El backend se encarga de negociar con Substack simulando ser una visita orgánica.</p>
                 <SubstackForm onSubmit={handleNewSubscription} />
               </div>
 
-              <div className="bg-gray-900 rounded-2xl p-6 text-white shadow-lg">
+              <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 text-white shadow-lg">
                 <h3 className="font-bold mb-2 flex items-center text-sm">
-                  <span className="mr-2">⚡</span> Método Restaurado
+                  <span className="mr-2">🚀</span> Método Directo
                 </h3>
-                <p className="text-gray-400 text-xs leading-relaxed">
-                  Estamos utilizando el endpoint <code>substack.com/api/v1/free_signup</code> pasando el subdominio como parámetro. Este es el método más estable para evitar bloqueos 404/403.
+                <p className="text-gray-400 text-xs leading-relaxed mb-2">
+                  Implementando la estrategia "cover_page". Atacamos directamente al dominio del newsletter inyectando las cabeceras <code>Origin</code> y <code>Referer</code> correctas.
                 </p>
+                <div className="bg-black/30 p-2 rounded text-[10px] font-mono text-purple-200 mt-2">
+                  source: "cover_page"<br/>
+                  endpoint: /api/v1/free_signup
+                </div>
               </div>
             </div>
             
             <div className="lg:col-span-7 space-y-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-gray-800">Logs del Servidor</h2>
+                <h2 className="text-lg font-bold text-gray-800">Traza de Ejecución</h2>
               </div>
               <LogViewer logs={logs} subscriptions={subscriptions} />
             </div>
@@ -110,7 +113,7 @@ const App: React.FC = () => {
         )}
       </main>
       <footer className="py-8 text-center text-gray-400 text-xs font-medium uppercase tracking-[0.2em]">
-        Substack API Bridge &bull; Centralized Edition
+        Substack API Bridge &bull; TechTrails Method
       </footer>
     </div>
   );
